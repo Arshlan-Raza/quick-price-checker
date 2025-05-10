@@ -68,7 +68,7 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				},
 				platform: {
-					blinkit: '#0c831f',
+					blinkit: '#28b848',
 					zepto: '#8025fb',
 					swiggy: '#fc8019',
 					bigbasket: '#84c225',

@@ -3,13 +3,17 @@ import React from 'react';
 import { useShop, Product, Platform } from '@/context/ShopContext';
 import { Clock, ShoppingBag, Truck, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getBestPricesPerPlatform } from '@/utils/getBestPricesPerPlatform';
+import mapNameToCommonName from '@/utils/mapNameToCommonName';
 
 interface ProductDetailProps {
   product: Product;
 }
 
 const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
-  const { addToCart, cart, updateCartItemQuantity } = useShop();
+  const { addToCart, cart, updateCartItemQuantity,groupedProducts } = useShop();
+  const { getProductByOriginalName } = useShop();
+
   
   // Sort prices from lowest to highest
   const sortedPrices = [...product.prices]
@@ -18,18 +22,33 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
   
   const bestPrice = sortedPrices.length > 0 ? sortedPrices[0] : null;
   
-  const handleAddToCart = (platform: Platform) => {
-    // Check if product is already in cart for this platform
-    const existingItem = cart.find(item => 
-      item.product.id === product.id && item.platform === platform
-    );
-    
-    if (existingItem) {
-      updateCartItemQuantity(product.id, existingItem.quantity + 1, platform);
-    } else {
-      addToCart(product, platform);
-    }
-  };
+const handleAddToCart = (platform: Platform) => {
+  const priceEntry = product.prices.find(p => p.platform === platform);
+  if (!priceEntry) return;
+
+  const commonName = mapNameToCommonName(priceEntry.originalName, groupedProducts);
+
+  if (!commonName) {
+    console.warn('❌ Could not resolve commonName for', priceEntry.originalName);
+    return;
+  }
+
+  const existingItem = cart.find(
+    item => item.commonName === commonName && item.platform === platform
+  );
+
+  if (existingItem) {
+    updateCartItemQuantity(commonName, platform, priceEntry.originalName, existingItem.quantity + 1); // ✅ now passing all 4
+  } else {
+    addToCart(commonName, platform, priceEntry.originalName); // this one is already correct
+  }
+};
+
+
+console.log(groupedProducts);
+
+  
+  
 
   return (
     <div className="grid md:grid-cols-2 gap-8">
@@ -47,7 +66,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product }) => {
         <div className="mb-4">
           <span className="text-sm text-muted-foreground">{product.category}</span>
           <h1 className="text-2xl font-bold mt-1">{product.name}</h1>
-          <div className="text-sm mt-1">{product.unit}</div>
         </div>
         
         <div className="text-sm text-muted-foreground mb-6">

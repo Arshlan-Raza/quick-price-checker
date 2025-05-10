@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"vite\" \"node server.js\"",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "scrape": "node src/scrapers/index.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -49,12 +50,14 @@
     "dotenv": "^16.4.7",
     "embla-carousel-react": "^8.3.0",
     "express": "^4.21.2",
+    "fuzzysort": "^3.1.0",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.462.0",
     "mongodb": "^6.15.0",
     "mongoose": "^8.13.1",
     "next-themes": "^0.3.0",
-    "puppeteer": "^24.4.0",
+    "puppeteer": "^24.8.2",
+    "puppeteer-core": "^24.8.2",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -77,6 +80,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",

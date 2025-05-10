@@ -1,391 +1,348 @@
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useMemo,
+  useContext,
+} from "react";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+const normalize = (str: string) =>
+  str?.trim().toLowerCase().replace(/\s+/g, "-");
 
-// Define types
-export type Platform = 'blinkit' | 'zepto' | 'swiggy' | 'bigbasket' | 'dunzo';
-
-export interface PlatformInfo {
-id: Platform;
-name: string;
-color: string;
-logo: string;
-deliveryTime: string;
-}
-
-export interface ProductPrice {
-platform: Platform;
-price: number;
-available: boolean;
-deliveryTime: string;
+// Type Definitions
+export interface PriceInfo {
+  originalName: string;
+  commonName: string;
+  platform: string;
+  price: number;
+  available: boolean;
+  deliveryTime: string;
+  image: string;
 }
 
 export interface Product {
-id: string;
-name: string;
-description: string;
-category: string;
-image: string;
-unit: string;
-prices: ProductPrice[];
+  key?: string;
+  commonName: string;
+  name: string;
+  description: string;
+  category: string[];
+  image: string;
+  prices: PriceInfo[];
+}
+
+export interface PlatformInfo {
+  id: string;
+  name: string;
+  image: string;
 }
 
 export interface CartItem {
-product: Product;
-quantity: number;
-platform: Platform | null;
+  commonName: string;
+  platform: string;
+  quantity: number;
+  originalName: string;
 }
 
-interface ShopContextType {
-products: Product[];
-filteredProducts: Product[];
-categories: string[];
-platforms: PlatformInfo[];
-cart: CartItem[];
-selectedPlatform: Platform | null;
-selectedCategory: string;
-searchQuery: string;
-setSearchQuery: (query: string) => void;
-setSelectedPlatform: (platform: Platform | null) => void;
-setSelectedCategory: (category: string) => void;
-addToCart: (product: Product, platform?: Platform) => void;
-removeFromCart: (productId: string, platform?: Platform) => void;
-updateCartItemQuantity: (productId: string, quantity: number, platform?: Platform) => void;
-getCartTotal: (platform?: Platform) => number;
-getCartItemCount: () => number;
-getBestPlatformForCart: () => { platform: Platform; total: number } | null;
-clearCart: () => void;
+export interface ShopContextType {
+  products: Product[];
+  groupedProducts: Product[];
+  filteredProducts: Product[];
+  categories: string[];
+  platforms: PlatformInfo[];
+  cart: CartItem[];
+  selectedPlatform: string | null;
+  selectedCategory: string;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  setSelectedPlatform: (platform: string | null) => void;
+  setSelectedCategory: (category: string) => void;
+  addToCart: (
+    commonName: string,
+    platform: string,
+    originalName: string
+  ) => void;
+
+  removeFromCart: (
+    commonName: string,
+    platform: string,
+    originalName: string
+  ) => void;
+
+  updateCartItemQuantity: (
+    commonName: string,
+    platform: string,
+    originalName: string,
+    quantity: number
+  ) => void;
+
+  getCartTotal: (platformFilter?: string | null) => number;
+  getCartItemCount: () => number;
+  getBestPlatformForCart: () => string;
+  clearCart: () => void;
+  getProductByCommonName: (commonName: string) => Product | undefined;
+  getProductByOriginalName: (originalName: string) => Product | undefined;
 }
 
-// Create the context
-const ShopContext = createContext<ShopContextType | undefined>(undefined);
+// Create context
+export const ShopContext = createContext<ShopContextType>(
+  {} as ShopContextType
+);
+export type Platform = string;
 
-// Platform data
-const platformsData: PlatformInfo[] = [
-{ id: 'blinkit', name: 'Blinkit', color: '#0c831f', logo: '/blinkit-logo.png', deliveryTime: '10 mins' },
-{ id: 'zepto', name: 'Zepto', color: '#8025fb', logo: '/zepto-logo.png', deliveryTime: '8 mins' },
-{ id: 'swiggy', name: 'Swiggy Instamart', color: '#fc8019', logo: '/swiggy-logo.png', deliveryTime: '15 mins' },
-{ id: 'bigbasket', name: 'Big Basket', color: '#84c225', logo: '/bigbasket-logo.png', deliveryTime: '30 mins' },
-{ id: 'dunzo', name: 'Dunzo Daily', color: '#00d290', logo: '/dunzo-logo.png', deliveryTime: '20 mins' },
-];
+export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [groupedProducts, setGroupedProducts] = useState<Product[]>([]);
+  const [platforms, setPlatforms] = useState<PlatformInfo[]>([]);
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-// Mock product data
-const productsData: Product[] = [
-{
-  id: '1',
-  name: 'Fresh Milk',
-  description: 'Farm-fresh whole milk, perfect for your daily needs.',
-  category: 'Dairy & Milk',
-  image: '/placeholder.svg',
-  unit: '500ml',
-  prices: [
-    { platform: 'blinkit', price: 30, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 28, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 32, available: true, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 29, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 31, available: true, deliveryTime: '20 mins' },
-  ],
-},
-{
-  id: '2',
-  name: 'Organic Bananas',
-  description: 'Sweet and nutritious organic bananas.',
-  category: 'Fruits',
-  image: '/placeholder.svg',
-  unit: '6 pcs',
-  prices: [
-    { platform: 'blinkit', price: 45, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 42, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 48, available: true, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 40, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 46, available: true, deliveryTime: '20 mins' },
-  ],
-},
-{
-  id: '3',
-  name: 'Fresh Tomatoes',
-  description: 'Ripe and juicy tomatoes for your salads and cooking.',
-  category: 'Vegetables',
-  image: '/placeholder.svg',
-  unit: '500g',
-  prices: [
-    { platform: 'blinkit', price: 35, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 32, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 38, available: true, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 30, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 36, available: false, deliveryTime: '20 mins' },
-  ],
-},
-{
-  id: '4',
-  name: 'Chicken Breast',
-  description: 'Premium boneless chicken breast, fresh and ready to cook.',
-  category: 'Meat',
-  image: '/placeholder.svg',
-  unit: '500g',
-  prices: [
-    { platform: 'blinkit', price: 180, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 175, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 190, available: true, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 170, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 185, available: true, deliveryTime: '20 mins' },
-  ],
-},
-{
-  id: '5',
-  name: 'Whole Wheat Bread',
-  description: 'Nutritious whole wheat bread for a healthy breakfast.',
-  category: 'Grocery',
-  image: '/placeholder.svg',
-  unit: '400g',
-  prices: [
-    { platform: 'blinkit', price: 40, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 38, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 42, available: true, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 37, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 41, available: true, deliveryTime: '20 mins' },
-  ],
-},
-{
-  id: '6',
-  name: 'Greek Yogurt',
-  description: 'Creamy Greek yogurt, high in protein and perfect for breakfast.',
-  category: 'Dairy & Milk',
-  image: '/placeholder.svg',
-  unit: '200g',
-  prices: [
-    { platform: 'blinkit', price: 60, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 58, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 65, available: false, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 55, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 62, available: true, deliveryTime: '20 mins' },
-  ],
-},
-{
-  id: '7',
-  name: 'Potato Chips',
-  description: 'Crunchy potato chips for your snack cravings.',
-  category: 'Snacks',
-  image: '/placeholder.svg',
-  unit: '100g',
-  prices: [
-    { platform: 'blinkit', price: 30, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 28, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 32, available: true, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 27, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 31, available: true, deliveryTime: '20 mins' },
-  ],
-},
-{
-  id: '8',
-  name: 'Cola Soft Drink',
-  description: 'Refreshing cola drink for instant energy.',
-  category: 'Beverages',
-  image: '/placeholder.svg',
-  unit: '1L',
-  prices: [
-    { platform: 'blinkit', price: 65, available: true, deliveryTime: '10 mins' },
-    { platform: 'zepto', price: 62, available: true, deliveryTime: '8 mins' },
-    { platform: 'swiggy', price: 68, available: true, deliveryTime: '15 mins' },
-    { platform: 'bigbasket', price: 60, available: true, deliveryTime: '30 mins' },
-    { platform: 'dunzo', price: 66, available: true, deliveryTime: '20 mins' },
-  ],
-},
-];
+  const normalizeProducts = (data: any[]): Product[] =>
+    data.map((p) => ({
+      ...p,
+      commonName: normalize(p.name),
+      description: p.description || "",
+      category: Array.isArray(p.category) ? p.category : [p.category],
+      prices: [
+        {
+          platform: p.source,
+          price: p.price,
+          available: true,
+          deliveryTime: "10 mins",
+          image: p.image,
+          originalName: p.name,
+          commonName: normalize(p.name),
+        },
+      ],
+    }));
 
-// Extract unique categories
-const categoriesData = ['All', ...new Set(productsData.map(product => product.category))];
-
-// Provider component
-export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-const [products] = useState<Product[]>(productsData);
-const [filteredProducts, setFilteredProducts] = useState<Product[]>(productsData);
-const [categories] = useState<string[]>(categoriesData);
-const [platforms] = useState<PlatformInfo[]>(platformsData);
-const [cart, setCart] = useState<CartItem[]>([]);
-const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
-const [selectedCategory, setSelectedCategory] = useState<string>('All');
-const [searchQuery, setSearchQuery] = useState<string>('');
-
-// Filter products based on selected category, platform, and search query
-useEffect(() => {
-  let filtered = [...products];
-  
-  // Filter by category
-  if (selectedCategory !== 'All') {
-    filtered = filtered.filter(product => product.category === selectedCategory);
-  }
-  
-  // Filter by platform availability
-  if (selectedPlatform) {
-    filtered = filtered.filter(product => 
-      product.prices.some(price => price.platform === selectedPlatform && price.available)
-    );
-  }
-  
-  // Filter by search query
-  if (searchQuery.trim() !== '') {
-    const query = searchQuery.toLowerCase();
-    filtered = filtered.filter(product => 
-      product.name.toLowerCase().includes(query) || 
-      product.description.toLowerCase().includes(query) ||
-      product.category.toLowerCase().includes(query)
-    );
-  }
-  
-  setFilteredProducts(filtered);
-}, [products, selectedCategory, selectedPlatform, searchQuery]);
-
-const addToCart = (product: Product, platform?: Platform) => {
-  setCart(prevCart => {
-    // If platform is specified, use it; otherwise, use the selected platform or null
-    const targetPlatform = platform || selectedPlatform;
-    
-    // Check if this product + platform combination already exists in cart
-    const existingItemIndex = prevCart.findIndex(item => 
-      item.product.id === product.id && 
-      (targetPlatform ? item.platform === targetPlatform : item.platform === null)
-    );
-    
-    if (existingItemIndex !== -1) {
-      // Update quantity of existing item
-      const updatedCart = [...prevCart];
-      updatedCart[existingItemIndex].quantity += 1;
-      return updatedCart;
-    } else {
-      // Add new item to cart
-      return [...prevCart, {
-        product,
-        quantity: 1,
-        platform: targetPlatform
-      }];
-    }
-  });
-};
-
-const removeFromCart = (productId: string, platform?: Platform) => {
-  setCart(prevCart => {
-    // If platform is specified, use it; otherwise, use the selected platform or remove all instances
-    const targetPlatform = platform || selectedPlatform;
-    
-    if (targetPlatform) {
-      // Remove specific product + platform combination
-      return prevCart.filter(item => 
-        !(item.product.id === productId && item.platform === targetPlatform)
-      );
-    } else {
-      // Remove all instances of this product regardless of platform
-      return prevCart.filter(item => item.product.id !== productId);
-    }
-  });
-};
-
-const updateCartItemQuantity = (productId: string, quantity: number, platform?: Platform) => {
-  setCart(prevCart => {
-    const targetPlatform = platform || selectedPlatform;
-    
-    return prevCart.map(item => {
-      if (item.product.id === productId && 
-          (targetPlatform ? item.platform === targetPlatform : true)) {
-        return { ...item, quantity: Math.max(0, quantity) };
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/products");
+        if (!res.ok) throw new Error("Failed to fetch products");
+        const rawData = await res.json();
+        const normalized = normalizeProducts(rawData);
+        setProducts(normalized);
+        setError(null);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
       }
-      return item;
-    }).filter(item => item.quantity > 0); // Remove items with quantity 0
-  });
-};
+    };
+    fetchProducts();
+  }, []);
 
-const getCartTotal = (platform?: Platform) => {
-  return cart.reduce((total, item) => {
-    // If platform is specified, only count items from that platform
-    if (platform && item.platform !== platform) {
-      return total;
-    }
-    
-    // Find the price for this item's platform
-    const priceInfo = item.product.prices.find(p => 
-      p.platform === (item.platform || selectedPlatform)
+  useEffect(() => {
+    const fetchGroupedProducts = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/grouped-products");
+        if (!res.ok) throw new Error("Failed to fetch grouped products");
+        const data: Product[] = await res.json();
+        setGroupedProducts(data);
+
+        const platformMap = new Map<string, string>();
+        data.forEach((product) => {
+          product.prices.forEach((p) => {
+            if (!platformMap.has(p.platform)) {
+              platformMap.set(p.platform, p.image);
+            }
+          });
+        });
+
+        const platformList: PlatformInfo[] = Array.from(
+          platformMap.entries()
+        ).map(([id, image]) => ({
+          id,
+          name: id.charAt(0).toUpperCase() + id.slice(1),
+          image,
+        }));
+        setPlatforms(platformList);
+        setError(null);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGroupedProducts();
+  }, []);
+
+  const getProductByCommonName = (commonName: string): Product | undefined => {
+    const key = normalize(commonName);
+    return groupedProducts.find(
+      (p) =>
+        normalize(p.commonName) === key ||
+        p.prices.some((price) => normalize(price.originalName) === key)
     );
-    
-    // Add to total if price is available
-    if (priceInfo && priceInfo.available) {
-      return total + (priceInfo.price * item.quantity);
-    }
-    
-    return total;
-  }, 0);
-};
+  };
 
-const getCartItemCount = () => {
-  return cart.reduce((count, item) => count + item.quantity, 0);
-};
+  const getProductByOriginalName = (
+    originalName: string
+  ): Product | undefined => {
+    const normalizedKey = normalize(originalName);
+    return groupedProducts.find((group) =>
+      group.prices.some(
+        (price) => normalize(price.originalName) === normalizedKey
+      )
+    );
+  };
 
-const getBestPlatformForCart = () => {
-  if (cart.length === 0) return null;
-  
-  // Calculate total for each platform
-  const platformTotals = platforms.map(platform => {
-    // Check if all cart items are available on this platform
-    const allItemsAvailable = cart.every(item => {
-      const priceInfo = item.product.prices.find(p => p.platform === platform.id);
-      return priceInfo && priceInfo.available;
+  const categories = useMemo(() => {
+    const unique = new Set<string>();
+    products.forEach((p) => {
+      p.category.forEach((c) => unique.add(c));
     });
-    
-    // If not all items are available, return a very high price
-    if (!allItemsAvailable) {
-      return { platform: platform.id, total: Number.MAX_SAFE_INTEGER };
-    }
-    
-    // Calculate total for this platform
-    const total = cart.reduce((sum, item) => {
-      const priceInfo = item.product.prices.find(p => p.platform === platform.id);
-      return sum + (priceInfo ? priceInfo.price * item.quantity : 0);
+    return ["All", ...Array.from(unique)];
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchPlatform =
+        selectedPlatform === "All" ||
+        selectedPlatform === null ||
+        p.prices?.some((pr) => pr.platform === selectedPlatform);
+      const matchCategory =
+        selectedCategory === "All" || p.category.includes(selectedCategory);
+      const matchSearch = p.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      return matchPlatform && matchCategory && matchSearch;
+    });
+  }, [products, selectedPlatform, selectedCategory, searchQuery]);
+
+  const addToCart = (
+    commonName: string,
+    platform: string,
+    originalName: string
+  ) => {
+    setCart((prev) => {
+      const existing = prev.find(
+        (i) =>
+          i.commonName === commonName &&
+          i.platform === platform &&
+          i.originalName === originalName
+      );
+      if (existing) {
+        return prev.map((i) =>
+          i.commonName === commonName &&
+          i.platform === platform &&
+          i.originalName === originalName
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
+        );
+      }
+      return [...prev, { commonName, platform, originalName, quantity: 1 }];
+    });
+  };
+
+  const removeFromCart = (
+    commonName: string,
+    platform: string,
+    originalName: string
+  ) => {
+    setCart((prev) =>
+      prev.filter(
+        (i) =>
+          !(
+            i.commonName === commonName &&
+            i.platform === platform &&
+            i.originalName === originalName
+          )
+      )
+    );
+  };
+
+  const updateCartItemQuantity = (
+    commonName: string,
+    platform: string,
+    originalName: string,
+    quantity: number
+  ) => {
+    setCart((prev) =>
+      prev.map((i) =>
+        i.commonName === commonName &&
+        i.platform === platform &&
+        i.originalName === originalName
+          ? { ...i, quantity }
+          : i
+      )
+    );
+  };
+
+  const getCartTotal = (platformFilter?: string | null) => {
+    return cart.reduce((total, item) => {
+      const product = getProductByCommonName(item.commonName);
+      if (!product || !product.prices) return total;
+
+      const matched = product.prices.find((p) =>
+        platformFilter
+          ? p.platform === platformFilter
+          : p.platform === item.platform
+      );
+
+      return total + (matched?.price || 0) * item.quantity;
     }, 0);
-    
-    return { platform: platform.id, total };
-  });
-  
-  // Find platform with lowest total
-  return platformTotals.reduce((best, current) => 
-    current.total < best.total ? current : best
+  };
+
+  const getCartItemCount = () => {
+    return cart.reduce((count, item) => count + item.quantity, 0);
+  };
+
+  const getBestPlatformForCart = () => {
+    const totals: { [platform: string]: number } = {};
+    cart.forEach((item) => {
+      const product = getProductByCommonName(item.commonName);
+      product?.prices.forEach((p) => {
+        if (!p.available) return;
+        totals[p.platform] =
+          (totals[p.platform] || 0) + p.price * item.quantity;
+      });
+    });
+    const best = Object.entries(totals).reduce(
+      (a, b) => (b[1] < a[1] ? b : a),
+      [null, Infinity]
+    )[0];
+    return best || "Unavailable";
+  };
+
+  const clearCart = () => setCart([]);
+
+  const contextValue: ShopContextType = {
+    products,
+    groupedProducts,
+    filteredProducts,
+    categories,
+    platforms,
+    cart,
+    selectedPlatform,
+    selectedCategory,
+    searchQuery,
+    setSearchQuery,
+    setSelectedPlatform,
+    setSelectedCategory,
+    addToCart,
+    removeFromCart,
+    updateCartItemQuantity,
+    getCartTotal,
+    getCartItemCount,
+    getBestPlatformForCart,
+    clearCart,
+    getProductByCommonName,
+    getProductByOriginalName,
+  };
+
+  return (
+    <ShopContext.Provider value={contextValue}>{children}</ShopContext.Provider>
   );
 };
 
-const clearCart = () => {
-  setCart([]);
-};
-
-const contextValue: ShopContextType = {
-  products,
-  filteredProducts,
-  categories,
-  platforms,
-  cart,
-  selectedPlatform,
-  selectedCategory,
-  searchQuery,
-  setSearchQuery,
-  setSelectedPlatform,
-  setSelectedCategory,
-  addToCart,
-  removeFromCart,
-  updateCartItemQuantity,
-  getCartTotal,
-  getCartItemCount,
-  getBestPlatformForCart,
-  clearCart,
-};
-
-return (
-  <ShopContext.Provider value={contextValue}>
-    {children}
-  </ShopContext.Provider>
-);
-};
-
-// Custom hook to use the shop context
-export const useShop = () => {
-const context = useContext(ShopContext);
-if (context === undefined) {
-  throw new Error('useShop must be used within a ShopProvider');
-}
-return context;
-};
+export const useShop = () => useContext(ShopContext);

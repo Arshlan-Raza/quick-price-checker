@@ -1,37 +1,38 @@
+import mongoose from "mongoose";
 import scrapeBigBasket from "./bigBasketScraper.js";
 import scrapeBlinkit from "./blinkitScraper.js";
 import scrapeZepto from "./zeptoScraper.js";
 import scrapeSwiggy from "./swiggyScraper.js";
-import mongoose from "mongoose";
 import connectDB from "../confiq/db.js";
 import Product from "../models/Product.js";
 
 async function startScraping() {
-    try {
+  try {
+    await connectDB();
+    console.log("MongoDB connected successfully");
 
-        await connectDB();
-        console.log("MongoDB connected successfully");
+    await Product.deleteMany({});
+    console.log("Database cleared before scraping");
 
+    const results = await Promise.allSettled([
+      scrapeSwiggy(),
+      scrapeZepto(),
+      scrapeBlinkit(),
+      scrapeBigBasket()
+    ]);
 
-        await Product.deleteMany({});
-        console.log("Database cleared before scraping");
+    results.forEach((result, i) => {
+      if (result.status === "rejected") {
+        console.error(`❌ Scraper ${i + 1} failed:`, result.reason);
+      }
+    });
 
-
-        await Promise.all([
-            scrapeBlinkit(),
-            scrapeSwiggy(),
-            scrapeZepto(),
-            scrapeBigBasket()
-        ]);
-
-        console.log("Scraping complete!");
-    } catch (error) {
-        console.error("Error during scraping:", error);
-    } finally {
-        // Close MongoDB connection only after all scrapers finish
-        await mongoose.connection.close();
-        console.log("MongoDB connection closed");
-    }
+  } catch (error) {
+    console.error("❌ Fatal error during setup:", error.message);
+  } finally {
+    await mongoose.connection.close();
+    console.log("🔌 MongoDB connection closed");
+  }
 }
 
 startScraping();
